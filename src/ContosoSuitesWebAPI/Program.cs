@@ -34,8 +34,23 @@ builder.Services.AddSingleton<Kernel>((_) =>
         apiKey: builder.Configuration["AzureOpenAI:ApiKey"]!
     );
 #pragma warning restore SKEXP0010 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    kernelBuilder.Plugins.AddFromType<MaintenanceRequestPlugin>("MaintenanceCopilot");
     var databaseService = _.GetRequiredService<IDatabaseService>();
     kernelBuilder.Plugins.AddFromObject(databaseService);
+    kernelBuilder.Services.AddSingleton<CosmosClient>((_) =>
+    {
+        string userAssignedClientId = builder.Configuration["AZURE_CLIENT_ID"]!;
+        var credential = new DefaultAzureCredential(
+            new DefaultAzureCredentialOptions
+            {
+                ManagedIdentityClientId = userAssignedClientId
+            });
+        CosmosClient client = new(
+            accountEndpoint: builder.Configuration["CosmosDB:AccountEndpoint"]!,
+            tokenCredential: credential
+        );
+        return client;
+    });
     return kernelBuilder.Build();
 });
 
@@ -158,8 +173,8 @@ app.MapPost("/VectorSearch", async ([FromBody] float[] queryVector, [FromService
 // This endpoint is used to send a message to the Maintenance Copilot.
 app.MapPost("/MaintenanceCopilotChat", async ([FromBody]string message, [FromServices] MaintenanceCopilot copilot) =>
 {
-    // Exercise 5 Task 2 TODO #10: Insert code to call the Chat function on the MaintenanceCopilot. Don't forget to remove the NotImplementedException.
-    throw new NotImplementedException();
+    var response = await copilot.Chat(message);
+    return response;
 })
     .WithName("Copilot")
     .WithOpenApi();
